@@ -112,33 +112,36 @@ impl Renderer {
 
         Ok(())
     }
-
     fn draw_key(&self, ctx: &mut Context, player: &Player, map: &Map, screen_width: f32, screen_height: f32) -> GameResult {
         // Calculate the distance from the player to the key
-        let key_distance = (((player.x as f64) - (map.key_position.0 as f64)).powi(2) + 
-                            ((player.y as f64) - (map.key_position.1 as f64)).powi(2)).sqrt();
-
-        // Only draw the key if it is within a certain range
-        if !self.key_collected && key_distance < 10.0 {
+        let dx = map.key_position.0 as f64 - player.x as f64;
+        let dy = map.key_position.1 as f64 - player.y as f64;
+        let key_distance = (dx * dx + dy * dy).sqrt();
+    
+        // Calculate the angle to the key from the player's perspective
+        let angle_to_key = (dy).atan2(dx) - player.angle;
+    
+        // Check if the key is within the player's field of view and within a certain distance
+        if key_distance < 10.0 && angle_to_key.abs() < std::f64::consts::PI / 4.0 {
             // Calculate the key's screen position
+            let screen_x = (screen_width as f64 / 2.0) + (angle_to_key.to_degrees() / 60.0 * screen_width as f64);
             let key_height = (screen_height as f64 / key_distance) as f32;
-            let key_start = (screen_height - key_height) / 2.0;
-
-            // Determine the x-coordinate of the key relative to the player's view
-            let angle_to_key = ((map.key_position.1 as f64 - player.y as f64).atan2(map.key_position.0 as f64 - player.x as f64) - player.angle)
-                .to_degrees();
-            let key_x = ((angle_to_key + 30.0) / 60.0 * screen_width as f64) as f32;
-
-            // Draw the key on the screen
+            let screen_y = (screen_height / 2.0) + key_height / 4.0;
+    
+            // Increase the scale to make the key larger
+            let scale_factor = 1.5;  // Adjust this value to make the key bigger or smaller
             let params = DrawParam::default()
-                .dest([key_x, key_start])
-                .scale([0.5, 0.5]);
-
+                .dest([screen_x as f32, screen_y])
+                .scale([scale_factor, scale_factor]);
+    
             graphics::draw(ctx, &self.key_texture, params)?;
         }
-
+    
         Ok(())
     }
+    
+    
+    
 
     fn detect_key_pickup(&mut self, ctx: &mut Context, player: &Player, map: &Map) -> GameResult {
         // Check if the player is close enough to the key to pick it up

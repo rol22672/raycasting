@@ -20,7 +20,11 @@ struct MyGame {
 
 impl MyGame {
     fn new(ctx: &mut Context) -> GameResult<MyGame> {
-        let player = player::Player::new(3.0, 3.0, 0.0);
+        let player = player::Player::new(7.5, 7.5, 0.0);
+
+        // Assuming the map is a 10x10 grid:
+        
+
         let map = map::Map::new();
         let renderer = renderer::Renderer::new(ctx)?;
 
@@ -85,19 +89,13 @@ impl EventHandler for MyGame {
     }
 }
 
-fn main() -> GameResult {
-    // Set up a resource path for loading files if needed
-    let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-        let mut path = path::PathBuf::from(manifest_dir);
-        path.push("resources");
-        path
-    } else {
-        path::PathBuf::from("./resources")
-    };
-
-    let (mut ctx, event_loop) = ContextBuilder::new("racaster", "author")
-        .add_resource_path(resource_dir)
+fn main() -> ggez::GameResult {
+    // Create a context with a specific resource directory
+    let (mut ctx, event_loop) = ContextBuilder::new("game_id", "author")
+        .add_resource_path("assets/resources")  // Set the new path here
         .build()?;
+
+    // Now you can use the moved resources directory
     let mut game = MyGame::new(&mut ctx)?;
-    event::run(ctx, event_loop, game)
+    ggez::event::run(ctx, event_loop, game)
 }
