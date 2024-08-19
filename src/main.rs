@@ -1,49 +1,103 @@
+use ggez::audio::{self, SoundSource};
+use ggez::event::{self, EventHandler, KeyCode, MouseButton};
+use ggez::graphics::{self, Color};
+use ggez::{Context, ContextBuilder, GameResult};
+use std::env;
+use std::path;
+
 mod player;
 mod raycaster;
 mod map;
 mod renderer;
 
-use sdl2::pixels::Color;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use std::time::Duration;
+struct MyGame {
+    player: player::Player,
+    map: map::Map,
+    renderer: renderer::Renderer,
+    last_mouse_x: f32,
+    music: audio::Source, // Add a field to hold the music
+}
 
-fn main() {
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-    let window = video_subsystem.window("Raycaster", 800, 600)
-        .position_centered()
-        .build()
-        .unwrap();
+impl MyGame {
+    fn new(ctx: &mut Context) -> GameResult<MyGame> {
+        let player = player::Player::new(3.0, 3.0, 0.0);
+        let map = map::Map::new();
+        let renderer = renderer::Renderer::new(ctx)?;
 
-    let mut canvas = window.into_canvas().build().unwrap();
-    let texture_creator = canvas.texture_creator();
-    let mut event_pump = sdl_context.event_pump().unwrap();
+        // Load the music file
+        let mut music = audio::Source::new(ctx, "/music.ogg").map_err(|e| {
+            eprintln!("Failed to load music: {:?}", e);
+            e
+        })?;
+        music.set_repeat(true); // Set the music to loop
+        music.play(ctx).map_err(|e| {
+            eprintln!("Failed to play music: {:?}", e);
+            e
+        })?;
 
-    let mut player = player::Player::new(3.0, 3.0, 0.0);
-    let map = map::Map::new();
-    let mut renderer = renderer::Renderer::new(&texture_creator);
+        Ok(MyGame {
+            player,
+            map,
+            renderer,
+            last_mouse_x: 0.0,
+            music,
+        })
+    }
+}
 
-    'running: loop {
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                    break 'running;
-                },
-                Event::KeyDown { keycode: Some(Keycode::W), .. } => player.move_forward(0.1, &map),
-                Event::KeyDown { keycode: Some(Keycode::S), .. } => player.move_backward(0.1, &map),
-                Event::KeyDown { keycode: Some(Keycode::A), .. } => player.rotate(-0.1),
-                Event::KeyDown { keycode: Some(Keycode::D), .. } => player.rotate(0.1),
-                _ => {}
-            }
+impl EventHandler for MyGame {
+    fn update(&mut self, ctx: &mut Context) -> GameResult {
+        // Handle keyboard input to move the player
+        if ggez::input::keyboard::is_key_pressed(ctx, KeyCode::W) {
+            self.player.move_forward(0.1, &self.map);
+        }
+        if ggez::input::keyboard::is_key_pressed(ctx, KeyCode::S) {
+            self.player.move_backward(0.1, &self.map);
+        }
+        if ggez::input::keyboard::is_key_pressed(ctx, KeyCode::A) {
+            self.player.rotate(-0.1);
+        }
+        if ggez::input::keyboard::is_key_pressed(ctx, KeyCode::D) {
+            self.player.rotate(0.1);
         }
 
-        canvas.set_draw_color(Color::RGB(0, 0, 0));
-        canvas.clear();
-
-        renderer.render_scene(&mut canvas, &player, &map);
-
-        canvas.present();
-        std::thread::sleep(Duration::from_millis(1000 / 60));
+        Ok(())
     }
+
+    fn mouse_motion_event(&mut self, _ctx: &mut Context, x: f32, _y: f32, _dx: f32, _dy: f32) {
+        // Calculate how much the mouse moved since the last frame
+        let delta_x = x - self.last_mouse_x;
+
+        // Rotate the player based on mouse movement
+        self.player.rotate((delta_x as f64) * 0.005);
+
+        // Update the last mouse X position
+        self.last_mouse_x = x;
+    }
+
+    fn draw(&mut self, ctx: &mut Context) -> GameResult {
+        graphics::clear(ctx, Color::BLACK);
+
+        // Render the scene
+        self.renderer.render_scene(ctx, &self.player, &self.map)?;
+
+        graphics::present(ctx)
+    }
+}
+
+fn main() -> GameResult {
+    // Set up a resource path for loading files if needed
+    let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+        let mut path = path::PathBuf::from(manifest_dir);
+        path.push("resources");
+        path
+    } else {
+        path::PathBuf::from("./resources")
+    };
+
+    let (mut ctx, event_loop) = ContextBuilder::new("racaster", "author")
+        .add_resource_path(resource_dir)
+        .build()?;
+    let mut game = MyGame::new(&mut ctx)?;
+    event::run(ctx, event_loop, game)
 }
